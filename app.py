@@ -1581,12 +1581,15 @@ def send_faculty_notification():
         return jsonify({'success': False, 'message': 'Failed to send notification.'}), 500
 
 
+# Initialize database when the application starts (works with Gunicorn & Docker)
+init_db()
+migrate_db()
+
 if __name__ == '__main__':
     print("🚀 Starting ProjectCritique Server...")
     print(f"📊 Database: {DB_PATH}")
     print(f"🤖 AI Similarity: {'Enabled' if SIMILARITY_ENABLED else 'Disabled (using basic similarity)'}")
     print(f"📈 Similarity Thresholds: Duplicate≥{DUPLICATE_THRESHOLD}%, High≥{HIGH_SIMILARITY_THRESHOLD}%")
     print("✅ Server ready!")
-    init_db()
-    migrate_db()
+
     app.run(debug=True, use_reloader=False, port=5000, host='0.0.0.0')
