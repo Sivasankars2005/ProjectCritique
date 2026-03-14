@@ -2691,11 +2691,39 @@
         }
 
         function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(() => {
-                showToast('Room code copied to clipboard!', 'success');
-            }).catch(err => {
-                console.error('Could not copy text: ', err);
-            });
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showToast('Room code copied to clipboard!', 'success');
+                }).catch(err => {
+                    console.error('Could not copy text: ', err);
+                });
+            } else {
+                // Fallback for non-HTTPS or restricted iframe environments
+                let textArea = document.createElement("textarea");
+                textArea.value = text;
+                
+                // Move out of viewport
+                textArea.style.position = "fixed";
+                textArea.style.left = "-999999px";
+                textArea.style.top = "-99999px";
+                document.body.appendChild(textArea);
+                
+                textArea.focus();
+                textArea.select();
+                
+                try {
+                    let successful = document.execCommand('copy');
+                    if (successful) {
+                        showToast('Room code copied to clipboard!', 'success');
+                    } else {
+                        console.error('Fallback: Oops, unable to copy');
+                    }
+                } catch (err) {
+                    console.error('Fallback: Oops, unable to copy', err);
+                }
+                
+                document.body.removeChild(textArea);
+            }
         }
 
         // --- Project Submission Functions ---
