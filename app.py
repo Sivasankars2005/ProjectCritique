@@ -12,10 +12,12 @@ import string
 from werkzeug.utils import secure_filename
 import threading
 
+import numpy as np
 try:
     import torch
     from sentence_transformers import SentenceTransformer, util
-    model = SentenceTransformer('BAAI/bge-base-en-v1.5')
+    # all-MiniLM-L6-v2: faster, CPU-friendly, better topic separation
+    model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
     SIMILARITY_ENABLED = True
     import PyPDF2
     import docx
@@ -27,9 +29,13 @@ except Exception as e:
 
 app = Flask(__name__)
 CORS(app)
-DUPLICATE_THRESHOLD = 92.0
-HIGH_SIMILARITY_THRESHOLD = 78.0
-MEDIUM_SIMILARITY_THRESHOLD = 65.0
+# --- Calibrated thresholds (post score-calibration) ---
+# Raw cosine scores from all-MiniLM-L6-v2 are scaled so that the
+# "baseline noise" (~44%) maps to 0%.  These thresholds reflect that space.
+DUPLICATE_THRESHOLD = 75.0
+HIGH_SIMILARITY_THRESHOLD = 55.0
+MEDIUM_SIMILARITY_THRESHOLD = 35.0
+SIMILARITY_BASELINE = 44.0   # typical raw score for completely unrelated short texts
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ProjectCritique.db")
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'abstracts')
@@ -201,6 +207,15 @@ def init_db():
             FOREIGN KEY (room_id) REFERENCES rooms(id)
         )
     ''')
+    # Table to cache per-project chunk embeddings (avoids recomputation)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS project_embeddings (
+            project_id TEXT PRIMARY KEY,
+            embedding BLOB NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (project_id) REFERENCES projects(id)
+        )
+    ''')
 
     # Create indexes for better query performance
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_room_members_user ON room_members(user_id)')
@@ -354,6 +369,20 @@ def migrate_db():
             ''')
             conn.commit()
             
+        # Migrate project_embeddings table
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='project_embeddings'")
+        if not cursor.fetchone():
+            print("Migrating database: Creating project_embeddings table...")
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS project_embeddings (
+                    project_id TEXT PRIMARY KEY,
+                    embedding BLOB NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY (project_id) REFERENCES projects(id)
+                )
+            ''')
+            conn.commit()
+
     except Exception as e:
         logging.error(f"Migration error: {e}")
     finally:
@@ -448,70 +477,171 @@ def get_room_faculty_db(room_id):
     """
     return fetch_all(query, (room_id,))
 
-def calculate_basic_similarity(new_description, existing_descriptions):
-    if not existing_descriptions:
+# ===================================================================
+# SEMANTIC SIMILARITY ENGINE  v2  (all-MiniLM-L6-v2 + calibration)
+# ===================================================================
+
+def chunk_text(text, chunk_size=300):
+    """Split text into word-based chunks of approx chunk_size words."""
+    words = text.split()
+    if not words:
+        return [""]
+    return [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
+
+
+def calibrate_score(raw_score, baseline=None):
+    """
+    Map raw cosine similarity from [baseline, 100] to calibrated [0, 100].
+    Scores below the baseline (random noise) are clamped to 0.
+    """
+    bl = baseline if baseline is not None else SIMILARITY_BASELINE
+    if raw_score <= bl:
         return 0.0
-    new_words = set(new_description.lower().split())
-    max_similarity = 0.0
-    for existing_desc in existing_descriptions:
-        existing_words = set(existing_desc.lower().split())
-        if len(new_words) == 0 or len(existing_words) == 0:
+    calibrated = ((raw_score - bl) / (100.0 - bl)) * 100.0
+    return min(round(calibrated, 2), 100.0)
+
+
+def _compute_embedding(text):
+    """Return a mean-pooled numpy embedding for the given text (chunked)."""
+    if not SIMILARITY_ENABLED or model is None:
+        return None
+    chunks = chunk_text(text)
+    embeddings = model.encode(chunks, convert_to_numpy=True, show_progress_bar=False)
+    # Mean-pool across chunks
+    return embeddings.mean(axis=0)
+
+
+def embed_project(project_id, title, description):
+    """
+    Compute and store the embedding for a project.
+    Returns the numpy embedding array (or None on failure).
+    """
+    text = f"{title} {description}".strip()
+    emb = _compute_embedding(text)
+    if emb is None:
+        return None
+    # Serialize and store
+    emb_bytes = emb.astype(np.float32).tobytes()
+    execute_query(
+        "INSERT OR REPLACE INTO project_embeddings (project_id, embedding, updated_at) VALUES (?, ?, ?)",
+        (project_id, emb_bytes, datetime.datetime.now().isoformat())
+    )
+    return emb
+
+
+def get_or_create_embedding(project_id, title, description):
+    """Fetch cached embedding from DB or compute + store a fresh one."""
+    row = fetch_one("SELECT embedding FROM project_embeddings WHERE project_id = ?", (project_id,))
+    if row and row.get("embedding"):
+        try:
+            return np.frombuffer(row["embedding"], dtype=np.float32).copy()
+        except Exception as e:
+            logging.warning(f"Failed to decode cached embedding for {project_id}: {e}")
+    return embed_project(project_id, title, description)
+
+
+def calculate_basic_similarity(new_text, existing_texts):
+    """Jaccard word-overlap fallback when AI model is unavailable."""
+    new_words = set(new_text.lower().split())
+    max_sim = 0.0
+    for existing_text in existing_texts:
+        existing_words = set(existing_text.lower().split())
+        if not new_words or not existing_words:
             continue
-        intersection = new_words.intersection(existing_words)
-        union = new_words.union(existing_words)
-        similarity = (len(intersection) / len(union)) * 100 if len(union) > 0 else 0
-        max_similarity = max(max_similarity, similarity)
-    return max_similarity
+        union = new_words | existing_words
+        sim = (len(new_words & existing_words) / len(union)) * 100 if union else 0.0
+        max_sim = max(max_sim, sim)
+    return max_sim
+
 
 def calculate_semantic_similarity(new_project, existing_projects):
-    # Prepare new project text
-    new_text = f"{new_project['title']} {new_project.get('description', '')}".strip()
-    
-    # Prepare existing projects text
-    existing_texts = []
-    valid_existing_projects = []
-    
-    for proj in existing_projects:
-        # Combine title, description, and extracted text (if available)
-        combined_text = f"{proj['title']} {proj.get('description', '')}".strip()
-        if combined_text:
-            existing_texts.append(combined_text)
-            valid_existing_projects.append(proj)
-    if not existing_texts:
+    """
+    v2 Semantic similarity using all-MiniLM-L6-v2 with:
+      - chunk-based mean-pooled embeddings
+      - DB-cached embeddings for existing projects
+      - calibrated scores (SIMILARITY_BASELINE mapped to 0 percent)
+
+    Returns (calibrated_score: float, most_similar_project: dict | None)
+    """
+    new_text = f"{new_project.get('title', '')} {new_project.get('description', '')}".strip()
+
+    if not existing_projects:
         return 0.0, None
-    if not SIMILARITY_ENABLED:
+
+    if not SIMILARITY_ENABLED or model is None:
+        existing_texts = [
+            f"{p.get('title', '')} {p.get('description', '')}".strip()
+            for p in existing_projects
+        ]
         return calculate_basic_similarity(new_text, existing_texts), None
+
     try:
-        new_embedding = model.encode(new_text, convert_to_tensor=True)
-        existing_embeddings = model.encode(existing_texts, convert_to_tensor=True)
-        cosine_scores = util.pytorch_cos_sim(new_embedding, existing_embeddings)[0]
-        max_score, max_idx = torch.max(cosine_scores, dim=0)
-        max_score = max_score.item() * 100
-        most_similar_proj = None
-        if max_score > 0 and max_idx.item() < len(valid_existing_projects):
-            most_similar_proj = valid_existing_projects[max_idx.item()]
-        return max_score, most_similar_proj
+        new_emb = _compute_embedding(new_text)
+        if new_emb is None:
+            return 0.0, None
+
+        max_raw = 0.0
+        most_similar = None
+
+        for proj in existing_projects:
+            proj_id = proj.get("id", "")
+            proj_title = proj.get("title", "")
+            proj_desc = proj.get("description", "")
+            existing_emb = (
+                get_or_create_embedding(proj_id, proj_title, proj_desc)
+                if proj_id
+                else _compute_embedding(f"{proj_title} {proj_desc}".strip())
+            )
+            if existing_emb is None:
+                continue
+
+            # Cosine similarity
+            dot = float(np.dot(new_emb, existing_emb))
+            norm = float(np.linalg.norm(new_emb) * np.linalg.norm(existing_emb))
+            raw = (dot / norm * 100.0) if norm > 0 else 0.0
+
+            if raw > max_raw:
+                max_raw = raw
+                most_similar = proj
+
+        calibrated = calibrate_score(max_raw)
+        return calibrated, most_similar
+
     except Exception as e:
-        logging.error(f"Error in semantic similarity calculation: {e}")
+        logging.error(f"Semantic similarity error: {e}")
+        existing_texts = [
+            f"{p.get('title', '')} {p.get('description', '')}".strip()
+            for p in existing_projects
+        ]
         return calculate_basic_similarity(new_text, existing_texts), None
+
 
 def recalculate_project_score(project_id):
     try:
         project = get_project_by_id_db(project_id)
-        if not project: return
-        abstract = get_abstract_by_project_id_db(project_id)
-        project['extracted_text'] = abstract['extracted_text'] if abstract and abstract.get('extracted_text') else ""
-        query = "SELECT p.title, p.description FROM projects p WHERE p.submittedBy != ? AND p.room_id = ?"
-        others = fetch_all(query, (project['submittedBy'], project['room_id']))
+        if not project:
+            return
+        # Invalidate cached embedding so it is freshly computed
+        execute_query("DELETE FROM project_embeddings WHERE project_id = ?", (project_id,))
+        query = "SELECT id, title, description FROM projects p WHERE p.submittedBy != ? AND p.room_id = ?"
+        others = fetch_all(query, (project["submittedBy"], project["room_id"]))
         sim, _ = calculate_semantic_similarity(project, others)
-        if sim >= DUPLICATE_THRESHOLD: flag = 'DUPLICATE'
-        elif sim >= HIGH_SIMILARITY_THRESHOLD: flag = 'HIGH_SIMILARITY'
-        elif sim >= MEDIUM_SIMILARITY_THRESHOLD: flag = 'MEDIUM_SIMILARITY'
-        else: flag = 'UNIQUE'
-        execute_query("UPDATE projects SET similarity_percentage = ?, similarity_flag = ? WHERE id = ?", (sim, flag, project_id))
+        if sim >= DUPLICATE_THRESHOLD:
+            flag = "DUPLICATE"
+        elif sim >= HIGH_SIMILARITY_THRESHOLD:
+            flag = "HIGH_SIMILARITY"
+        elif sim >= MEDIUM_SIMILARITY_THRESHOLD:
+            flag = "MEDIUM_SIMILARITY"
+        else:
+            flag = "UNIQUE"
+        execute_query(
+            "UPDATE projects SET similarity_percentage = ?, similarity_flag = ? WHERE id = ?",
+            (sim, flag, project_id)
+        )
         logging.info(f"Recalculated score for {project_id}: {sim}% ({flag})")
     except Exception as e:
         logging.error(f"Recalculation error: {e}")
+
 
 TEMPLATE_PATH = os.path.join(BASE_DIR, 'templates', 'index.html')
 HTML_TEMPLATE = open(TEMPLATE_PATH, 'r', encoding='utf-8').read() if os.path.exists(TEMPLATE_PATH) else """
@@ -920,7 +1050,10 @@ def submit_project():
         # Run ALL similarity computation in background thread (non-blocking)
         def compute_similarity_async(pid, ptitle, pdesc, faculty_email, student_email, rid):
             try:
-                existing_projects_query = "SELECT p.title, p.description FROM projects p WHERE p.submittedBy != ? AND p.room_id = ? AND p.id != ?"
+                # Pre-compute and cache the new project's embedding
+                embed_project(pid, ptitle, pdesc)
+
+                existing_projects_query = "SELECT p.id, p.title, p.description FROM projects p WHERE p.submittedBy != ? AND p.room_id = ? AND p.id != ?"
                 existing_projects = fetch_all(existing_projects_query, (student_email, rid, pid))
                 new_project = {'title': ptitle, 'description': pdesc}
                 sim_pct, _ = calculate_semantic_similarity(new_project, existing_projects)
