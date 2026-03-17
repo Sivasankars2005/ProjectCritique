@@ -6,26 +6,49 @@ import sqlite3
 import uuid
 import datetime
 import logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 import os
 import random
 import string
 from werkzeug.utils import secure_filename
 import threading
-
 import numpy as np
-try:
-    import torch
-    from sentence_transformers import SentenceTransformer, util
-    # all-MiniLM-L6-v2: faster, CPU-friendly, better topic separation
-    model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-    SIMILARITY_ENABLED = True
-    import PyPDF2
-    import docx
-except Exception as e:
-    logging.warning(f"Similarity dependencies missing: {e}")
-    SIMILARITY_ENABLED = False
-    model = None
-    util = None
+import PyPDF2
+import docx
+
+# --- AI Model Initialization ---
+model = None
+util = None
+SIMILARITY_ENABLED = False
+MODEL_NAME = 'sentence-transformers/all-MiniLM-L6-v2'
+
+def initialize_ai_engine():
+    global model, util, SIMILARITY_ENABLED
+    try:
+        logging.info("🤖 AI engine: Initializing...")
+        import torch
+        from sentence_transformers import SentenceTransformer, util as st_util
+        util = st_util
+        
+        # 1. Try local first (zero wait)
+        try:
+            model = SentenceTransformer(MODEL_NAME, local_files_only=True)
+            logging.info("🤖 AI engine: Successfully loaded from local cache.")
+        except Exception:
+            logging.info("🤖 AI engine: Not found locally, checking network (this may take time)...")
+            # 2. Try network
+            model = SentenceTransformer(MODEL_NAME)
+            logging.info("🤖 AI engine: Successfully downloaded and initialized.")
+            
+        SIMILARITY_ENABLED = True
+        return True
+    except Exception as e:
+        logging.error(f"❌ AI engine: Initialization failed: {e}")
+        SIMILARITY_ENABLED = False
+        return False
+
+# Initialize AI synchronously
+initialize_ai_engine()
 
 app = Flask(__name__)
 CORS(app)
@@ -40,6 +63,32 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ProjectCritique.db")
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'abstracts')
 ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx'}
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def extract_text_from_pdf(pdf_path):
+    text = ""
+    try:
+        with open(pdf_path, 'rb') as f:
+            reader = PyPDF2.PdfReader(f)
+            for page in reader.pages:
+                text += page.extract_text() or ""
+    except Exception as e:
+        logging.error(f"PDF extraction error: {e}")
+    return text
+
+def extract_text_from_docx(docx_path):
+    text = ""
+    try:
+        doc = docx.Document(docx_path)
+        for para in doc.paragraphs:
+            text += para.text + "\n"
+    except Exception as e:
+        logging.error(f"Docx extraction error: {e}")
+    return text
+ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx'}
 MAX_ABSTRACT_SIZE = 10 * 1024 * 1024  # 10 MB
 app.config['MAX_CONTENT_LENGTH'] = MAX_ABSTRACT_SIZE
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -50,17 +99,23 @@ def select_guide():
         data = request.get_json()
         room_id = data.get('room_id', '').strip()
         user_email = data.get('user_email', '').strip().lower()
-        faculty_email = data.get('faculty_email', '').strip().lower()
+        faculty_email = data.get('faculty_email') # Could be None
+        
+        if faculty_email:
+            faculty_email = faculty_email.strip().lower()
+        else:
+            faculty_email = None # Explicitly set to None for SQL NULL
 
-        if not all([room_id, user_email, faculty_email]):
-            return jsonify({'success': False, 'message': 'Missing required fields.'}), 400
+        if not all([room_id, user_email]):
+            return jsonify({'success': False, 'message': 'room_id and user_email are required.'}), 400
 
         query = "UPDATE room_members SET selected_faculty_email = ? WHERE room_id = ? AND user_email = ?"
         success = execute_query(query, (faculty_email, room_id, user_email))
 
         if success:
-            return jsonify({'success': True, 'message': 'Faculty guide selected successfully.'})
-        return jsonify({'success': False, 'message': 'Failed to select faculty guide.'}), 500
+            msg = 'Faculty guide selected successfully.' if faculty_email else 'Faculty guide removed.'
+            return jsonify({'success': True, 'message': msg})
+        return jsonify({'success': False, 'message': 'Failed to update faculty guide.'}), 500
     except Exception as e:
         logging.error(f"Select guide error: {e}")
         return jsonify({'success': False, 'message': 'Internal server error.'}), 500
@@ -416,7 +471,7 @@ def get_room_by_id_db(room_id):
 def get_user_rooms_db(user_email):
     """Get all rooms a user is a member of"""
     query = """
-    SELECT r.*, rm.is_active, rm.joined_at
+    SELECT r.*, rm.is_active, rm.joined_at, rm.selected_faculty_email
     FROM rooms r
     JOIN room_members rm ON r.id = rm.room_id
     WHERE rm.user_email = ?
@@ -427,7 +482,7 @@ def get_user_rooms_db(user_email):
 def get_active_room_db(user_email):
     """Get user's currently active room"""
     query = """
-    SELECT r.*
+    SELECT r.*, rm.selected_faculty_email
     FROM rooms r
     JOIN room_members rm ON r.id = rm.room_id
     WHERE rm.user_email = ? AND rm.is_active = 1
@@ -1721,7 +1776,7 @@ migrate_db()
 if __name__ == '__main__':
     print("🚀 Starting ProjectCritique Server...")
     print(f"📊 Database: {DB_PATH}")
-    print(f"🤖 AI Similarity: {'Enabled' if SIMILARITY_ENABLED else 'Disabled (using basic similarity)'}")
+    print(f"🤖 AI Similarity: {'Enabled' if SIMILARITY_ENABLED else 'Disabled (AI Model failed to load)'}")
     print(f"📈 Similarity Thresholds: Duplicate≥{DUPLICATE_THRESHOLD}%, High≥{HIGH_SIMILARITY_THRESHOLD}%")
     print("✅ Server ready!")
 

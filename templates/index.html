@@ -2399,7 +2399,13 @@
 
                 rooms.forEach(room => {
                     const isActive = room.is_active == 1;
-                    if (isActive) activeRoomId = room.id;
+                    if (isActive) {
+                        activeRoomId = room.id;
+                        // Set stored faculty selection if active room has one
+                        if (room.selected_faculty_email) {
+                            selectedFacultyEmail = room.selected_faculty_email;
+                        }
+                    }
 
                     const item = document.createElement('div');
                     item.className = `group relative mx-2 px-3 py-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-between ${isActive ? 'bg-brand-50 text-brand-700 font-bold' : 'text-gray-500 hover:bg-gray-50'}`;
@@ -2828,8 +2834,21 @@
                 return;
             }
 
+            // If we have a stored email but not name/id, we need to find them in the faculty list
+            if (selectedFacultyEmail && (!selectedFacultyName || !selectedFacultyId)) {
+                try {
+                    const response = await fetch(`/api/faculty_list?room_id=${activeRoomId}`);
+                    const facultyList = await response.json();
+                    const storedFaculty = facultyList.find(f => f.email === selectedFacultyEmail);
+                    if (storedFaculty) {
+                        selectedFacultyId = storedFaculty.id;
+                        selectedFacultyName = storedFaculty.name || storedFaculty.email;
+                    }
+                } catch (e) { console.error("Error matching stored faculty:", e); }
+            }
+
             // If a guide is already selected, show compact assigned bar
-            if (selectedFacultyId) {
+            if (selectedFacultyEmail) {
                 const initial = (selectedFacultyName || selectedFacultyEmail || 'F').charAt(0).toUpperCase();
                 container.innerHTML = `
                     <div class="flex items-center justify-between bg-white border border-teal-200 rounded-2xl px-6 py-4 shadow-sm" style="background: rgba(20,184,166,0.03); border-color: rgba(20,184,166,0.3);">
@@ -2966,11 +2985,33 @@
             document.getElementById('facultyGuideConfirmDialog').classList.add('hidden');
         }
 
-        function changeFacultyGuide() {
-            selectedFacultyId = null;
-            selectedFacultyName = null;
-            selectedFacultyEmail = null;
-            renderFacultyGuideSection();
+        async function changeFacultyGuide() {
+            if (!activeRoomId || !currentUser.email) return;
+
+            try {
+                const response = await fetch('/api/rooms/select_guide', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        room_id: activeRoomId,
+                        user_email: currentUser.email,
+                        faculty_email: null
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    selectedFacultyId = null;
+                    selectedFacultyName = null;
+                    selectedFacultyEmail = null;
+                    renderFacultyGuideSection();
+                    showToast('Faculty guide removed.', 'success');
+                } else {
+                    showToast(data.message || 'Failed to change faculty guide', 'error');
+                }
+            } catch (error) {
+                console.error('Error changing guide:', error);
+                showToast('Failed to connect to server', 'error');
+            }
         }
 
         // --- Enhanced Similarity Warning Modal ---
