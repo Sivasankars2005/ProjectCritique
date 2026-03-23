@@ -863,6 +863,14 @@
                         </svg>
                         Join Room
                     </button>
+                    <!-- Switch to Admin Dashboard (only visible for faculty+admin users) -->
+                    <button id="facultySwitchToAdminBtn" onclick="switchToAdminDashboard()"
+                        class="hidden w-full flex items-center gap-3 px-4 py-3 text-teal-700 bg-teal-50 hover:bg-teal-100 rounded-xl font-semibold transition-all text-sm mt-2 border border-teal-200">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                        </svg>
+                        Switch to Admin
+                    </button>
                 </div>
             </nav>
 
@@ -1040,27 +1048,95 @@
                                     </svg>
                                 </div>
                                 <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-                                    <select id="facultyStatusFilter"
-                                        class="flex-1 lg:flex-none py-2.5 pl-4 pr-10 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-[#22A087]/20 outline-none text-gray-600 bg-white">
-                                        <option value="">All Status</option>
-                                        <option value="pending">Pending</option>
-                                        <option value="approved">Approved</option>
-                                        <option value="rejected">Rejected</option>
-                                    </select>
-                                    <select id="facultyDomainFilter"
-                                        class="flex-1 lg:flex-none py-2.5 pl-4 pr-10 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-[#22A087]/20 outline-none text-gray-600 bg-white">
-                                        <option value="">All Domains</option>
-                                        <option value="computer_science">Comp Sci</option>
-                                        <option value="data_science">Data Sci</option>
-                                        <option value="web_development">Web Dev</option>
-                                        <option value="ai_ml">AI/ML</option>
-                                    </select>
-                                    <select id="facultySimilarityFilter"
-                                        class="flex-1 lg:flex-none py-2.5 pl-4 pr-10 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-[#22A087]/20 outline-none text-gray-600 bg-white">
-                                        <option value="">All Similarity</option>
-                                        <option value="duplicate">Duplicates</option>
-                                        <option value="high">High Similarity</option>
-                                    </select>
+                                <!-- Custom Status Filter -->
+                                    <div class="relative flex-1 lg:flex-none" id="facultyStatusDropdown">
+                                        <button type="button" onclick="toggleFacultyFilter('Status')"
+                                            class="w-full lg:w-auto flex items-center justify-between gap-2 py-2.5 pl-4 pr-3 border border-gray-200 rounded-xl text-sm text-gray-700 bg-white hover:border-[#22A087] transition-all cursor-pointer min-w-[140px] focus:outline-none focus:border-[#22A087] focus:ring-1 focus:ring-[#22A087]">
+                                            <span id="facultyStatusLabel" class="font-medium">All Status</span>
+                                            <svg class="w-4 h-4 text-gray-400 transition-transform" id="facultyStatusChevron" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                        </button>
+                                        <div id="facultyStatusMenu" class="hidden absolute top-full left-0 mt-1.5 bg-white border border-gray-100 rounded-xl shadow-lg shadow-gray-200/50 z-40 min-w-[170px] py-1.5 overflow-hidden">
+                                            <div onclick="selectFacultyFilter('Status','','All Status')" class="faculty-filter-opt flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer hover:bg-teal-50 transition-colors text-teal-700 font-medium" data-val="">
+                                                <svg class="w-4 h-4 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                                All Status
+                                            </div>
+                                            <div onclick="selectFacultyFilter('Status','pending','Pending')" class="faculty-filter-opt flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer hover:bg-teal-50 transition-colors text-gray-600" data-val="pending">
+                                                <span class="w-4"></span>Pending
+                                            </div>
+                                            <div onclick="selectFacultyFilter('Status','approved','Approved')" class="faculty-filter-opt flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer hover:bg-teal-50 transition-colors text-gray-600" data-val="approved">
+                                                <span class="w-4"></span>Approved
+                                            </div>
+                                            <div onclick="selectFacultyFilter('Status','rejected','Rejected')" class="faculty-filter-opt flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer hover:bg-teal-50 transition-colors text-gray-600" data-val="rejected">
+                                                <span class="w-4"></span>Rejected
+                                            </div>
+                                        </div>
+                                        <select id="facultyStatusFilter" class="hidden">
+                                            <option value="" selected>All Status</option>
+                                            <option value="pending">Pending</option>
+                                            <option value="approved">Approved</option>
+                                            <option value="rejected">Rejected</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Custom Domain Filter -->
+                                    <div class="relative flex-1 lg:flex-none" id="facultyDomainDropdown">
+                                        <button type="button" onclick="toggleFacultyFilter('Domain')"
+                                            class="w-full lg:w-auto flex items-center justify-between gap-2 py-2.5 pl-4 pr-3 border border-gray-200 rounded-xl text-sm text-gray-700 bg-white hover:border-[#22A087] transition-all cursor-pointer min-w-[140px] focus:outline-none focus:border-[#22A087] focus:ring-1 focus:ring-[#22A087]">
+                                            <span id="facultyDomainLabel" class="font-medium">All Domains</span>
+                                            <svg class="w-4 h-4 text-gray-400 transition-transform" id="facultyDomainChevron" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                        </button>
+                                        <div id="facultyDomainMenu" class="hidden absolute top-full left-0 mt-1.5 bg-white border border-gray-100 rounded-xl shadow-lg shadow-gray-200/50 z-40 min-w-[170px] py-1.5 overflow-hidden">
+                                            <div onclick="selectFacultyFilter('Domain','','All Domains')" class="faculty-filter-opt flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer hover:bg-teal-50 transition-colors text-teal-700 font-medium" data-val="">
+                                                <svg class="w-4 h-4 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                                All Domains
+                                            </div>
+                                            <div onclick="selectFacultyFilter('Domain','computer_science','Comp Sci')" class="faculty-filter-opt flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer hover:bg-teal-50 transition-colors text-gray-600" data-val="computer_science">
+                                                <span class="w-4"></span>Comp Sci
+                                            </div>
+                                            <div onclick="selectFacultyFilter('Domain','data_science','Data Sci')" class="faculty-filter-opt flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer hover:bg-teal-50 transition-colors text-gray-600" data-val="data_science">
+                                                <span class="w-4"></span>Data Sci
+                                            </div>
+                                            <div onclick="selectFacultyFilter('Domain','web_development','Web Dev')" class="faculty-filter-opt flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer hover:bg-teal-50 transition-colors text-gray-600" data-val="web_development">
+                                                <span class="w-4"></span>Web Dev
+                                            </div>
+                                            <div onclick="selectFacultyFilter('Domain','ai_ml','AI/ML')" class="faculty-filter-opt flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer hover:bg-teal-50 transition-colors text-gray-600" data-val="ai_ml">
+                                                <span class="w-4"></span>AI/ML
+                                            </div>
+                                        </div>
+                                        <select id="facultyDomainFilter" class="hidden">
+                                            <option value="" selected>All Domains</option>
+                                            <option value="computer_science">Comp Sci</option>
+                                            <option value="data_science">Data Sci</option>
+                                            <option value="web_development">Web Dev</option>
+                                            <option value="ai_ml">AI/ML</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Custom Similarity Filter -->
+                                    <div class="relative flex-1 lg:flex-none" id="facultySimilarityDropdown">
+                                        <button type="button" onclick="toggleFacultyFilter('Similarity')"
+                                            class="w-full lg:w-auto flex items-center justify-between gap-2 py-2.5 pl-4 pr-3 border border-gray-200 rounded-xl text-sm text-gray-700 bg-white hover:border-[#22A087] transition-all cursor-pointer min-w-[150px] focus:outline-none focus:border-[#22A087] focus:ring-1 focus:ring-[#22A087]">
+                                            <span id="facultySimilarityLabel" class="font-medium">All Similarity</span>
+                                            <svg class="w-4 h-4 text-gray-400 transition-transform" id="facultySimilarityChevron" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                        </button>
+                                        <div id="facultySimilarityMenu" class="hidden absolute top-full left-0 mt-1.5 bg-white border border-gray-100 rounded-xl shadow-lg shadow-gray-200/50 z-40 min-w-[180px] py-1.5 overflow-hidden">
+                                            <div onclick="selectFacultyFilter('Similarity','','All Similarity')" class="faculty-filter-opt flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer hover:bg-teal-50 transition-colors text-teal-700 font-medium" data-val="">
+                                                <svg class="w-4 h-4 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                                All Similarity
+                                            </div>
+                                            <div onclick="selectFacultyFilter('Similarity','duplicate','Duplicates')" class="faculty-filter-opt flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer hover:bg-teal-50 transition-colors text-gray-600" data-val="duplicate">
+                                                <span class="w-4"></span>Duplicates
+                                            </div>
+                                            <div onclick="selectFacultyFilter('Similarity','high','High Similarity')" class="faculty-filter-opt flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer hover:bg-teal-50 transition-colors text-gray-600" data-val="high">
+                                                <span class="w-4"></span>High Similarity
+                                            </div>
+                                        </div>
+                                        <select id="facultySimilarityFilter" class="hidden">
+                                            <option value="" selected>All Similarity</option>
+                                            <option value="duplicate">Duplicates</option>
+                                            <option value="high">High Similarity</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1103,7 +1179,7 @@
             </div>
 
             <nav class="flex-1 px-4 py-6 space-y-2">
-                <a href="#" onclick="showAdminDashboard()"
+                <a href="#" id="btnAdminDashboardTab" onclick="switchAdminTab('dashboard')"
                     class="flex items-center gap-3 px-4 py-3 text-white rounded-xl shadow-lg shadow-brand-500/20 font-medium transition-all"
                     style="background: linear-gradient(90deg, #219B84, #1B7A67);">
                     <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1112,7 +1188,7 @@
                     </svg>
                     Dashboard
                 </a>
-                <a href="#" onclick="showAdminDashboard()"
+                <a href="#" id="btnAdminManageRoomsTab" onclick="switchAdminTab('manageRooms')"
                     class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-xl font-medium transition-all">
                     <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -1120,6 +1196,15 @@
                     </svg>
                     Manage Rooms
                 </a>
+
+                <!-- Switch to Faculty Dashboard (only visible for faculty+admin users) -->
+                <button id="adminSwitchToFacultyBtn" onclick="switchToFacultyDashboard()"
+                    class="hidden w-full flex items-center gap-3 px-4 py-3 text-orange-700 bg-orange-50 hover:bg-orange-100 rounded-xl font-semibold transition-all text-sm mt-2 border border-orange-200">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                    </svg>
+                    Switch to Faculty
+                </button>
             </nav>
 
             <div class="p-4 border-t border-gray-100">
@@ -1148,7 +1233,8 @@
 
         <!-- Main Content -->
         <main class="flex-1 overflow-y-auto w-full">
-            <div class="max-w-[1600px] mx-auto p-6 md:p-10">
+            <!-- DASHBOARD TAB CONTENT -->
+            <div id="adminDashboardContent" class="max-w-[1600px] mx-auto p-6 md:p-10">
                 <!-- Header -->
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                     <div>
@@ -1182,6 +1268,7 @@
 
                 <!-- Stats Grid -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                    <!-- Stat boxes ... -->
                     <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-6">
                         <div class="h-12 w-12 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center">
                             <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1222,26 +1309,11 @@
                     </div>
                 </div>
 
-                <!-- Rooms Table -->
+                <!-- Rooms Table Overview (No Actions) -->
                 <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                     <div class="p-8 border-b border-gray-100">
-                        <h3 class="text-2xl font-bold text-gray-900">Rooms / Groups</h3>
-                        <p class="text-sm text-gray-500 mt-1">Manage academic rooms and monitor student-faculty
-                            assignments</p>
-                        <div class="mt-6 flex flex-col md:flex-row gap-4">
-                            <div class="relative flex-1">
-                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <svg class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24"
-                                        stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                    </svg>
-                                </span>
-                                <input type="text" id="adminRoomsSearch" oninput="filterAdminRooms()"
-                                    class="block w-full max-w-sm pl-10 pr-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#22A087]/20 focus:border-[#22A087] outline-none text-sm transition-all"
-                                    placeholder="Search by room name or code...">
-                            </div>
-                        </div>
+                        <h3 class="text-2xl font-bold text-gray-900">Rooms Overview</h3>
+                        <p class="text-sm text-gray-500 mt-1">Overview of all active academic rooms</p>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left">
@@ -1256,6 +1328,54 @@
                                 </tr>
                             </thead>
                             <tbody id="adminRoomsTableBody" class="divide-y divide-gray-50">
+                                <!-- Dynamic Content -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MANAGE ROOMS TAB CONTENT -->
+            <div id="adminManageRoomsContent" class="hidden max-w-[1600px] mx-auto p-6 md:p-10">
+                <!-- Header -->
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                    <div>
+                        <h2 class="text-3xl font-bold text-gray-900 text-left">Manage Rooms</h2>
+                        <p class="text-gray-500 mt-1">Notify members, download reports, and manage your rooms.</p>
+                    </div>
+                </div>
+
+                <!-- Manage Rooms Table -->
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div class="p-8 border-b border-gray-100">
+                        <h3 class="text-2xl font-bold text-gray-900">Rooms Management</h3>
+                        <div class="mt-6 flex flex-col md:flex-row gap-4">
+                            <div class="relative flex-1">
+                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <svg class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                </span>
+                                <input type="text" id="adminManageRoomsSearch" oninput="filterAdminManageRooms()"
+                                    class="block w-full max-w-sm pl-10 pr-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#22A087]/20 focus:border-[#22A087] outline-none text-sm transition-all"
+                                    placeholder="Search by room name or code...">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-gray-50/10">
+                                <tr class="text-gray-400 text-xs font-semibold uppercase tracking-wider border-b border-gray-100">
+                                    <th class="px-8 py-4">Room Name</th>
+                                    <th class="px-8 py-4">Room Code</th>
+                                    <th class="px-8 py-4">Members</th>
+                                    <th class="px-8 py-4">Created</th>
+                                    <th class="px-8 py-4 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminManageRoomsTableBody" class="divide-y divide-gray-50">
                                 <!-- Dynamic Content -->
                             </tbody>
                         </table>
@@ -1952,7 +2072,8 @@
         let currentUser = {
             email: null,
             name: null,
-            role: null
+            role: null,
+            is_admin: 0
         };
 
         // Faculty Guide state
@@ -2035,6 +2156,73 @@
                 chevron.style.transform = 'rotate(0deg)';
             }
         }
+
+        // --- Faculty Dashboard Filter Helpers ---
+        function toggleFacultyFilter(type) {
+            const menu = document.getElementById(`faculty${type}Menu`);
+            const chevron = document.getElementById(`faculty${type}Chevron`);
+            
+            // Close other faculty filters
+            ['Status', 'Domain', 'Similarity'].forEach(t => {
+                if (t !== type) {
+                    const m = document.getElementById(`faculty${t}Menu`);
+                    const c = document.getElementById(`faculty${t}Chevron`);
+                    if (m) m.classList.add('hidden');
+                    if (c) c.style.transform = 'rotate(0deg)';
+                }
+            });
+
+            menu.classList.toggle('hidden');
+            chevron.style.transform = menu.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
+        }
+
+        function selectFacultyFilter(type, value, text) {
+            // Update Label
+            document.getElementById(`faculty${type}Label`).textContent = text;
+            
+            // Update hidden select
+            document.getElementById(`faculty${type}Filter`).value = value;
+            
+            // Update UI selected state
+            const menu = document.getElementById(`faculty${type}Menu`);
+            const options = menu.querySelectorAll('.faculty-filter-opt');
+            
+            options.forEach(opt => {
+                if (opt.getAttribute('data-val') === value) {
+                    opt.classList.remove('text-gray-600');
+                    opt.classList.add('text-teal-700', 'font-medium');
+                    opt.innerHTML = `<svg class="w-4 h-4 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> ${text}`;
+                } else {
+                    opt.classList.remove('text-teal-700', 'font-medium');
+                    opt.classList.add('text-gray-600');
+                    const optText = opt.textContent.trim();
+                    opt.innerHTML = `<span class="w-4"></span>${optText}`;
+                }
+            });
+
+            // Close Menu
+            toggleFacultyFilter(type);
+
+            // Trigger fetch
+            renderFacultyProjects();
+        }
+
+        // Close dropdowns on outside click
+        document.addEventListener('click', (e) => {
+            // Faculty Filters
+            if (!e.target.closest('#facultyStatusDropdown') && 
+                !e.target.closest('#facultyDomainDropdown') && 
+                !e.target.closest('#facultySimilarityDropdown')) {
+                ['Status', 'Domain', 'Similarity'].forEach(type => {
+                    const m = document.getElementById(`faculty${type}Menu`);
+                    const c = document.getElementById(`faculty${type}Chevron`);
+                    if (m) m.classList.add('hidden');
+                    if (c) c.style.transform = 'rotate(0deg)';
+                });
+            }
+            
+            // Other existing dropdowns handled elsewhere...
+        });
 
         function selectCustomDropdownOption(value, text, menuId, triggerTextId, hiddenInputId) {
             // Update hidden input
@@ -2144,18 +2332,35 @@
                     currentUser.email = data.email;
                     currentUser.name = data.name;
                     currentUser.role = data.role;
+                    currentUser.is_admin = data.is_admin || 0;
 
                     document.getElementById('loginForm').reset();
 
-                    if (role === 'faculty') {
-                        showFacultyDashboard();
-                        document.getElementById('facultyNameDisplay').textContent = currentUser.name;
-                        // Set initials
-                        document.getElementById('facultyAvatarInitials').textContent = (currentUser.name || 'F').charAt(0).toUpperCase();
-                        document.getElementById('facultyNameGreeting').textContent = currentUser.name;
-                        renderFacultyProjects();
-                        renderFacultyStats();
-                        loadUserRooms(); // Added for faculty
+                    if (role === 'faculty' || (data.role === 'faculty' && role === 'admin')) {
+                        if (role === 'admin' && data.role === 'faculty') {
+                            // Faculty+Admin logging in as admin → show admin dashboard
+                            showAdminDashboard();
+                            document.getElementById('adminNameDisplay').textContent = currentUser.name;
+                            document.getElementById('adminAvatarInitials').textContent = (currentUser.name || 'A').charAt(0).toUpperCase();
+                            renderAdminRooms();
+                            // Show switch-to-faculty button
+                            const switchBtn = document.getElementById('adminSwitchToFacultyBtn');
+                            if (switchBtn) switchBtn.classList.remove('hidden');
+                        } else {
+                            showFacultyDashboard();
+                            document.getElementById('facultyNameDisplay').textContent = currentUser.name;
+                            // Set initials
+                            document.getElementById('facultyAvatarInitials').textContent = (currentUser.name || 'F').charAt(0).toUpperCase();
+                            document.getElementById('facultyNameGreeting').textContent = currentUser.name;
+                            renderFacultyProjects();
+                            renderFacultyStats();
+                            loadUserRooms(); // Added for faculty
+                            // Show switch-to-admin button if this faculty is also admin
+                            const switchBtn = document.getElementById('facultySwitchToAdminBtn');
+                            if (switchBtn && currentUser.is_admin === 1) {
+                                switchBtn.classList.remove('hidden');
+                            }
+                        }
                     } else if (role === 'admin') {
                         showAdminDashboard();
                         document.getElementById('adminNameDisplay').textContent = currentUser.name;
@@ -2183,7 +2388,7 @@
         }
 
         function logout() {
-            currentUser = { email: null, name: null, role: null };
+            currentUser = { email: null, name: null, role: null, is_admin: 0 };
             // Clear faculty and room state
             selectedFacultyId = null;
             selectedFacultyName = null;
@@ -2278,6 +2483,32 @@
             document.getElementById('studentDashboard').classList.add('hidden');
             document.getElementById('facultyDashboard').classList.add('hidden');
             document.getElementById('adminDashboard').classList.remove('hidden');
+        }
+
+        // --- Dashboard Switch Functions (for Faculty+Admin dual role) ---
+        function switchToAdminDashboard() {
+            document.getElementById('facultyDashboard').classList.add('hidden');
+            document.getElementById('adminDashboard').classList.remove('hidden');
+            document.getElementById('adminNameDisplay').textContent = currentUser.name;
+            document.getElementById('adminAvatarInitials').textContent = (currentUser.name || 'A').charAt(0).toUpperCase();
+            renderAdminRooms();
+            // Show the switch-back button
+            const switchBtn = document.getElementById('adminSwitchToFacultyBtn');
+            if (switchBtn) switchBtn.classList.remove('hidden');
+        }
+
+        function switchToFacultyDashboard() {
+            document.getElementById('adminDashboard').classList.add('hidden');
+            document.getElementById('facultyDashboard').classList.remove('hidden');
+            document.getElementById('facultyNameDisplay').textContent = currentUser.name;
+            document.getElementById('facultyAvatarInitials').textContent = (currentUser.name || 'F').charAt(0).toUpperCase();
+            document.getElementById('facultyNameGreeting').textContent = currentUser.name;
+            renderFacultyProjects();
+            renderFacultyStats();
+            loadUserRooms();
+            // Show the switch-back button
+            const switchBtn = document.getElementById('facultySwitchToAdminBtn');
+            if (switchBtn) switchBtn.classList.remove('hidden');
         }
 
         // --- Room Management Functions ---
@@ -2544,28 +2775,13 @@
                             </div>
                         </td>
                         <td class="px-8 py-6 text-right">
-                            <div class="flex items-center justify-end gap-2">
-                                <button onclick="openNotifyAdminModal('${room.id}', '${escapeHtml(room.name).replace(/'/g, "\\'")}')" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-gray-900 font-bold text-xs hover:bg-[#22A087]/5 hover:border-[#22A087] hover:ring-1 hover:ring-[#22A087] focus:outline-none focus:border-[#22A087] focus:ring-1 focus:ring-[#22A087] transition-all shadow-sm">
-                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
-                                    </svg>
-                                    Notify
-                                </button>
-                                <button id="adminReportBtn_${room.id}" onclick="generateAdminReport('${room.id}', '${room.name.replace(/'/g, "\\'")}')"
-                                    class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 hover:bg-[#22A087]/5 hover:border-[#22A087] hover:ring-1 hover:ring-[#22A087] focus:outline-none focus:border-[#22A087] focus:ring-1 focus:ring-[#22A087] rounded-xl text-gray-900 font-bold text-xs transition-all shadow-sm">
-                                    <svg class="w-4 h-4 adminReportIcon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                    </svg>
-                                    Report
-                                </button>
-                                <button onclick="viewRoomDetails('${room.id}')" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-gray-900 font-bold text-xs hover:bg-[#22A087]/5 hover:border-[#22A087] hover:ring-1 hover:ring-[#22A087] focus:outline-none focus:border-[#22A087] focus:ring-1 focus:ring-[#22A087] transition-all shadow-sm">
-                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                    </svg>
-                                    View
-                                </button>
-                            </div>
+                            <button onclick="viewRoomDetails('${room.id}')" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-gray-900 font-bold text-xs hover:bg-[#22A087]/5 hover:border-[#22A087] hover:ring-1 hover:ring-[#22A087] focus:outline-none focus:border-[#22A087] focus:ring-1 focus:ring-[#22A087] transition-all shadow-sm">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                                View
+                            </button>
                         </td>
                     `;
                     tbody.appendChild(tr);
@@ -2629,6 +2845,204 @@
                             <button onclick="viewRoomDetails('${room.id}')" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-gray-900 font-bold text-xs hover:bg-[#22A087]/5 hover:border-[#22A087] hover:ring-1 hover:ring-[#22A087] focus:outline-none focus:border-[#22A087] focus:ring-1 focus:ring-[#22A087] transition-all shadow-sm">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                 View
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Delete Room Function
+        async function deleteRoom(roomId, roomName) {
+            if (!confirm(`Are you sure you want to permanently delete the room "${roomName}"? This will delete all projects, members, and data associated with it. This action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/rooms/${roomId}?email=${encodeURIComponent(currentUser.email)}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showToast('Room deleted successfully!', 'success');
+                    // Refresh data
+                    renderAdminRooms();
+                    filterAdminManageRooms();
+                } else {
+                    showToast(data.message || 'Error deleting room.', 'error');
+                }
+            } catch (error) {
+                console.error('Delete room error:', error);
+                showToast('An error occurred while deleting the room.', 'error');
+            }
+        }
+
+        // Tab Switching function for Admin
+        function switchAdminTab(tabName) {
+            const dashboardTab = document.getElementById('adminDashboardContent');
+            const manageRoomsTab = document.getElementById('adminManageRoomsContent');
+            const btnDashboard = document.getElementById('btnAdminDashboardTab');
+            const btnManageRooms = document.getElementById('btnAdminManageRoomsTab');
+
+            // Reset buttons
+            btnDashboard.className = "flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-xl font-medium transition-all";
+            btnDashboard.style.background = "";
+            btnManageRooms.className = "flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-xl font-medium transition-all";
+            btnManageRooms.style.background = "";
+
+            if (tabName === 'dashboard') {
+                dashboardTab.classList.remove('hidden');
+                manageRoomsTab.classList.add('hidden');
+                
+                btnDashboard.className = "flex items-center gap-3 px-4 py-3 text-white rounded-xl shadow-lg shadow-brand-500/20 font-medium transition-all";
+                btnDashboard.style.background = "linear-gradient(90deg, #219B84, #1B7A67)";
+            } else if (tabName === 'manageRooms') {
+                dashboardTab.classList.add('hidden');
+                manageRoomsTab.classList.remove('hidden');
+
+                btnManageRooms.className = "flex items-center gap-3 px-4 py-3 text-white rounded-xl shadow-lg shadow-brand-500/20 font-medium transition-all";
+                btnManageRooms.style.background = "linear-gradient(90deg, #219B84, #1B7A67)";
+                
+                // Render manage rooms
+                filterAdminManageRooms();
+            }
+        }
+
+        function filterAdminRooms() {
+            const query = document.getElementById('adminRoomsSearch').value.toLowerCase();
+            const filtered = (window.__allAdminRooms || []).filter(r =>
+                r.name.toLowerCase().includes(query) || r.code.toLowerCase().includes(query)
+            );
+
+            const tbody = document.getElementById('adminRoomsTableBody');
+            tbody.innerHTML = '';
+
+            filtered.forEach(room => {
+                const date = new Date(room.created_at).toLocaleDateString('en-US');
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50 transition-all group';
+                tr.innerHTML = `
+                    <td class="px-8 py-6"><div class="font-bold text-gray-900">${room.name}</div></td>
+                    <td class="px-8 py-6">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-gray-800">${room.code}</span>
+                            <button onclick="copyToClipboard('${room.code}')" class="text-gray-400 hover:text-teal-600 transition-colors">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
+                            </button>
+                        </div>
+                    </td>
+                    <td class="px-8 py-6 text-sm text-gray-400">
+                         <div class="flex items-center gap-3">
+                            <div class="flex items-center gap-1.5"><svg class="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M12 14l9-5-9-5-9 5 9 5z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /><path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span class="font-bold text-gray-600">${room.student_count}</span></div>
+                            <div class="flex items-center gap-1.5"><svg class="h-4 w-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span class="font-bold text-gray-600">${room.faculty_count}</span></div>
+                         </div>
+                    </td>
+                    <td class="px-8 py-6 text-sm text-gray-500">
+                        <div class="flex items-center gap-2"><svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span>${date}</span></div>
+                    </td>
+                    <td class="px-8 py-6 text-right">
+                        <div class="flex items-center justify-end gap-2">
+                            <button onclick="openNotifyAdminModal('${room.id}', '${room.name.replace(/'/g, "\\'")}')" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-gray-900 font-bold text-xs hover:bg-[#22A087]/5 hover:border-[#22A087] hover:ring-1 hover:ring-[#22A087] focus:outline-none focus:border-[#22A087] focus:ring-1 focus:ring-[#22A087] transition-all shadow-sm">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+                                </svg>
+                                Notify
+                            </button>
+                            <button id="adminReportBtn_${room.id}" onclick="generateAdminReport('${room.id}', '${room.name.replace(/'/g, "\\'")}')"
+                                class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-gray-900 font-bold text-xs hover:bg-[#22A087]/5 hover:border-[#22A087] hover:ring-1 hover:ring-[#22A087] focus:outline-none focus:border-[#22A087] focus:ring-1 focus:ring-[#22A087] transition-all shadow-sm">
+                                <svg class="w-4 h-4 adminReportIcon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                Report
+                            </button>
+                            <button onclick="viewRoomDetails('${room.id}')" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-gray-900 font-bold text-xs hover:bg-[#22A087]/5 hover:border-[#22A087] hover:ring-1 hover:ring-[#22A087] focus:outline-none focus:border-[#22A087] focus:ring-1 focus:ring-[#22A087] transition-all shadow-sm">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                View
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Add filterAdminManageRooms function
+        function filterAdminManageRooms() {
+            const searchTerm = document.getElementById('adminManageRoomsSearch').value.toLowerCase();
+            const filtered = window.__allAdminRooms.filter(room =>
+                room.name.toLowerCase().includes(searchTerm) ||
+                room.code.toLowerCase().includes(searchTerm)
+            );
+
+            const tbody = document.getElementById('adminManageRoomsTableBody');
+            tbody.innerHTML = '';
+
+            filtered.forEach(room => {
+                const date = new Date(room.created_at).toLocaleDateString('en-US');
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50 transition-all group';
+                tr.innerHTML = `
+                    <td class="px-8 py-6">
+                        <div class="font-bold text-gray-900">${room.name}</div>
+                    </td>
+                    <td class="px-8 py-6">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-gray-800">${room.code}</span>
+                            <button onclick="copyToClipboard('${room.code}')" class="text-gray-400 hover:text-teal-600 transition-colors">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                                </svg>
+                            </button>
+                        </div>
+                    </td>
+                    <td class="px-8 py-6 text-sm text-gray-400">
+                         <div class="flex items-center gap-3">
+                            <div class="flex items-center gap-1.5">
+                                <svg class="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path d="M12 14l9-5-9-5-9 5 9 5z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                                <span class="font-bold text-gray-600">${room.student_count}</span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <svg class="h-4 w-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                                <span class="font-bold text-gray-600">${room.faculty_count}</span>
+                            </div>
+                         </div>
+                    </td>
+                    <td class="px-8 py-6 text-sm text-gray-500">
+                        <div class="flex items-center gap-2">
+                            <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                            <span>${date}</span>
+                        </div>
+                    </td>
+                    <td class="px-8 py-6 text-right">
+                        <div class="flex items-center justify-end gap-2">
+                            <button id="adminReportBtn_${room.id}" onclick="generateAdminReport('${room.id}', '${room.name.replace(/'/g, "\\'")}')"
+                                class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 hover:bg-[#22A087]/5 hover:border-[#22A087] hover:ring-1 hover:ring-[#22A087] focus:outline-none focus:border-[#22A087] focus:ring-1 focus:ring-[#22A087] rounded-xl text-gray-900 font-bold text-xs transition-all shadow-sm">
+                                <svg class="w-4 h-4 adminReportIcon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                Report
+                            </button>
+                            <button onclick="openNotifyAdminModal('${room.id}', '${escapeHtml(room.name).replace(/'/g, "\\'")}')" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-gray-900 font-bold text-xs hover:bg-[#22A087]/5 hover:border-[#22A087] hover:ring-1 hover:ring-[#22A087] focus:outline-none focus:border-[#22A087] focus:ring-1 focus:ring-[#22A087] transition-all shadow-sm">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+                                </svg>
+                                Notify
+                            </button>
+                            <button onclick="deleteRoom('${room.id}', '${escapeHtml(room.name).replace(/'/g, "\\'")}')"
+                                class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 hover:bg-red-50 hover:border-red-500 hover:text-red-600 rounded-xl text-red-500 font-bold text-xs transition-all shadow-sm focus:outline-none focus:ring-1 focus:ring-red-500">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                Delete
                             </button>
                         </div>
                     </td>
@@ -3170,7 +3584,7 @@
                     // Delete button shown only for pending/rejected, not for approved
                     const canDelete = p.status === 'pending' || p.status === 'rejected';
                     const deleteButton = canDelete ? `
-                        <button class="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all" 
+                        <button class="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all"
                             onclick="event.stopPropagation(); confirmDeleteProject('${p.id}', '${escapeHtml(p.title).replace(/'/g, "\\'")}');"
                             title="Delete Project">
                             <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -3325,7 +3739,7 @@
                             </div>
                         </td>
                             <td class="px-8 py-6 text-center">
-                            <button onclick="openViewProjectModal('${p.id}', false)" 
+                            <button onclick="openViewProjectModal('${p.id}', false)"
                                 class="inline-flex items-center gap-2.5 px-6 py-2.5 bg-white border border-gray-200 rounded-xl text-[11px] font-bold text-gray-900 hover:bg-teal-50 hover:border-[#22A087] hover:shadow-sm transition-all group/btn shadow-sm whitespace-nowrap">
                                 <svg class="w-3.5 h-3.5 text-gray-900 group-hover/btn:scale-110 transition-all font-bold" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />

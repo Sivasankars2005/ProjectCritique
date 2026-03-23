@@ -55,10 +55,12 @@ CORS(app)
 # --- Calibrated thresholds (post score-calibration) ---
 # Raw cosine scores from all-MiniLM-L6-v2 are scaled so that the
 # "baseline noise" (~44%) maps to 0%.  These thresholds reflect that space.
-DUPLICATE_THRESHOLD = 75.0
-HIGH_SIMILARITY_THRESHOLD = 55.0
-MEDIUM_SIMILARITY_THRESHOLD = 35.0
-SIMILARITY_BASELINE = 44.0   # typical raw score for completely unrelated short texts
+# --- Calibrated thresholds (post score-calibration) ---
+# Baseline empirically measured from actual project data (mean of unrelated pairs = 22.7%)
+DUPLICATE_THRESHOLD = 80.0
+HIGH_SIMILARITY_THRESHOLD = 50.0
+MEDIUM_SIMILARITY_THRESHOLD = 25.0
+SIMILARITY_BASELINE = 14.0   # empirically measured from your actual data
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ProjectCritique.db")
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'abstracts')
@@ -728,13 +730,21 @@ def register():
         
         if not all([name, email, password, role]):
             return jsonify({'success': False, 'message': 'All fields are required.'}), 400
-        if get_user_by_email_db(email):
+        if role not in ['student', 'faculty', 'admin']:
+            return jsonify({'success': False, 'message': 'Invalid role specified.'}), 400
+        
+        existing_user = get_user_by_email_db(email)
+        if existing_user:
+            # Allow faculty to upgrade to admin with the same email
+            if role == 'admin' and existing_user['role'] == 'faculty':
+                if execute_query("UPDATE users SET is_admin = 1 WHERE email = ?", (email,)):
+                    return jsonify({'success': True, 'message': 'Faculty account upgraded with admin privileges!'}), 200
+                else:
+                    return jsonify({'success': False, 'message': 'Failed to upgrade account.'}), 500
             return jsonify({'success': False, 'message': 'Email already registered.'}), 409
         
         # Handle admin registration
         is_admin = 1 if role == 'admin' else 0
-        if role not in ['student', 'faculty', 'admin']:
-            return jsonify({'success': False, 'message': 'Invalid role specified.'}), 400
             
         user_id = str(uuid.uuid4())
         query = "INSERT INTO users (id, name, email, password, role, is_admin) VALUES (?, ?, ?, ?, ?, ?)"
@@ -756,15 +766,28 @@ def login():
         password = data.get('password', '')
         role = data.get('role', '')
         user = get_user_by_email_db(email)
-        if not user or user['password'] != password or user['role'] != role:
-            return jsonify({'success': False, 'message': 'Invalid credentials or role mismatch.'}), 401
+        if not user or user['password'] != password:
+            return jsonify({'success': False, 'message': 'Invalid credentials.'}), 401
+        
+        # Allow faculty+admin users to log in as either 'faculty' or 'admin'
+        user_role = user['role']
+        user_is_admin = user.get('is_admin', 0)
+        if user_role != role:
+            # Faculty with admin privileges can log in as 'admin'
+            if user_role == 'faculty' and role == 'admin' and user_is_admin == 1:
+                pass  # Allow login
+            # Admin role can't log in as faculty unless their actual role is faculty
+            else:
+                return jsonify({'success': False, 'message': 'Invalid credentials or role mismatch.'}), 401
+        
         return jsonify({
             'success': True,
             'message': 'Login successful!',
             'user_id': user['id'],
             'name': user['name'],
             'email': user['email'],
-            'role': user['role']
+            'role': user['role'],
+            'is_admin': user_is_admin
         })
     except Exception as e:
         logging.error(f"Login error: {e}")
@@ -1020,6 +1043,52 @@ def get_room_details(room_id):
         logging.error(f"Get room details error: {e}")
         return jsonify({'success': False, 'message': 'Failed to get room details.'}), 500
 
+@app.route('/api/rooms/<room_id>', methods=['DELETE'])
+def delete_room(room_id):
+    """Admin deletes a room and all associated data"""
+    try:
+        admin_email = request.args.get('email', '').strip().lower()
+        if not admin_email:
+            return jsonify({'success': False, 'message': 'Admin email is required.'}), 400
+            
+        # Verify user is admin
+        admin_user = get_user_by_email_db(admin_email)
+        if not admin_user or admin_user.get('is_admin') != 1:
+            return jsonify({'success': False, 'message': 'Unauthorized. Only admins can delete rooms.'}), 403
+            
+        # Verify room exists
+        room = get_room_by_id_db(room_id)
+        if not room:
+            return jsonify({'success': False, 'message': 'Room not found.'}), 404
+            
+        # Delete associated data first (to avoid orphan records if no CASCADE is set)
+        
+        # 1. Delete notifications for this room
+        execute_query("DELETE FROM notifications WHERE room_id = ?", (room_id,))
+        
+        # 2. Get projects in this room to delete their embeddings and abstracts
+        projects = fetch_all("SELECT id FROM projects WHERE room_id = ?", (room_id,))
+        for proj in projects:
+            execute_query("DELETE FROM project_embeddings WHERE project_id = ?", (proj['id'],))
+            execute_query("DELETE FROM project_similarity WHERE project_id_1 = ? OR project_id_2 = ?", (proj['id'], proj['id']))
+            execute_query("DELETE FROM abstracts WHERE project_id = ?", (proj['id'],))
+            
+        # 3. Delete projects in this room
+        execute_query("DELETE FROM projects WHERE room_id = ?", (room_id,))
+        
+        # 4. Delete room members
+        execute_query("DELETE FROM room_members WHERE room_id = ?", (room_id,))
+        
+        # 5. Finally, delete the room itself
+        if execute_query("DELETE FROM rooms WHERE id = ?", (room_id,)):
+            return jsonify({'success': True, 'message': 'Room deleted successfully.'}), 200
+        else:
+            return jsonify({'success': False, 'message': 'Failed to delete room.'}), 500
+            
+    except Exception as e:
+        logging.error(f"Delete room error: {e}")
+        return jsonify({'success': False, 'message': 'Delete room failed - server error.'}), 500
+
 @app.route('/api/admin/rooms', methods=['GET'])
 def get_admin_rooms():
     """Get all rooms created by an admin"""
@@ -1102,6 +1171,23 @@ def submit_project():
     ))
 
     if success:
+        # --- Notify the assigned faculty about the new submission ---
+        try:
+            notif_query = """
+                INSERT INTO notifications (room_id, sender_email, sender_name, sender_role, recipient_email, title, message, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """
+            notif_title = '\U0001f4cb New Project Submission'
+            notif_message = f'{submitted_by_name} has submitted a new project idea: \"{title}\"'
+            if room_id:
+                execute_query(notif_query, (
+                    room_id, submitted_by_email, submitted_by_name, 'student',
+                    assigned_faculty_email, notif_title, notif_message, submitted_on
+                ))
+                logging.info(f"Notification sent to faculty {assigned_faculty_email}: {notif_title}")
+        except Exception as notif_err:
+            logging.error(f"Failed to send submission notification to faculty: {notif_err}")
+
         # Run ALL similarity computation in background thread (non-blocking)
         def compute_similarity_async(pid, ptitle, pdesc, faculty_email, student_email, rid):
             try:
@@ -1243,8 +1329,39 @@ def update_project_status(project_id):
         WHERE id = ?
         """
         try:
-            result = execute_query(update_query, (new_status, faculty_comment, datetime.datetime.now().isoformat(), project_id))
+            now_iso = datetime.datetime.now().isoformat()
+            result = execute_query(update_query, (new_status, faculty_comment, now_iso, project_id))
             if result:
+                # --- Send notification to the student ---
+                try:
+                    student_email = (project.get('submittedBy') or '').strip().lower()
+                    faculty_email = (project.get('assignedFacultyEmail') or '').strip().lower()
+                    faculty_name = project.get('assignedFacultyName') or 'Faculty'
+                    project_title = project.get('title') or 'Untitled'
+                    room_id = project.get('room_id') or ''
+
+                    if new_status == 'approved':
+                        notif_title = '✅ Project Approved'
+                        notif_message = f'Your project "{project_title}" has been approved by {faculty_name}.'
+                    elif new_status == 'rejected':
+                        notif_title = '❌ Project Rejected'
+                        reason = f' Reason: {faculty_comment}' if faculty_comment and faculty_comment != 'Rejected by faculty' else ''
+                        notif_message = f'Your project "{project_title}" has been rejected by {faculty_name}.{reason}'
+                    else:
+                        notif_title = '🔄 Project Status Updated'
+                        notif_message = f'Your project "{project_title}" status has been changed to pending by {faculty_name}.'
+
+                    if student_email and room_id:
+                        notif_query = """
+                            INSERT INTO notifications (room_id, sender_email, sender_name, sender_role, recipient_email, title, message, created_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """
+                        execute_query(notif_query, (room_id, faculty_email, faculty_name, 'faculty', student_email, notif_title, notif_message, now_iso))
+                        logging.info(f"Notification sent to {student_email}: {notif_title}")
+                except Exception as notif_err:
+                    logging.error(f"Failed to send status notification: {notif_err}")
+                    # Don't fail the status update if notification fails
+
                 return jsonify({'success': True, 'message': 'Project status updated.'}), 200
             else:
                 logging.error(f"Failed to update project status for {project_id} (query returned False)")
@@ -1289,6 +1406,27 @@ def resubmit_project(project_id):
             title, description, similarity_percentage, similarity_flag,
             now_iso, now_iso, project_id
         )):
+            # --- Notify the assigned faculty about the resubmission ---
+            try:
+                notif_query = """
+                    INSERT INTO notifications (room_id, sender_email, sender_name, sender_role, recipient_email, title, message, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """
+                notif_title = '\U0001f504 Project Resubmitted'
+                notif_message = f'{project["submittedByName"]} has resubmitted their project: \"{title}\"'
+                p_room_id = project.get('room_id') or ''
+                faculty_email = (project.get('assignedFacultyEmail') or '').strip().lower()
+                student_email = (project.get('submittedBy') or '').strip().lower()
+                student_name = project.get('submittedByName') or ''
+                if p_room_id and faculty_email:
+                    execute_query(notif_query, (
+                        p_room_id, student_email, student_name, 'student',
+                        faculty_email, notif_title, notif_message, now_iso
+                    ))
+                    logging.info(f"Notification sent to faculty {faculty_email}: {notif_title}")
+            except Exception as notif_err:
+                logging.error(f"Failed to send resubmission notification to faculty: {notif_err}")
+
             return jsonify({
                 'success': True, 
                 'message': 'Project updated and resubmitted successfully.',
